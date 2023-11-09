@@ -121,7 +121,8 @@ void setup() {
  	if (BMEstatus==false){
     	Serial.printf("BME280 at address 0x%02X failed to start", BMEhex);
  	}
-    
+
+  //Init Pins and timers  
   pinMode(dustData, INPUT);
   pinMode(moistProbe, INPUT);
   pinMode(waterPump, OUTPUT);
@@ -137,6 +138,7 @@ void setup() {
   ring.setBrightness(75);
 	strip.show();
 
+  //Startup lights
   delay(500);
   ringFill(0,24,red);
   stripFill(0,12,red);
@@ -146,10 +148,6 @@ void setup() {
   delay(500);
   ringFill(0,24,blue);
   stripFill(0,12,purple);
-  //delay(500);
-  //stripFill(0,12,black);
-
-    
 
 }
 
@@ -159,8 +157,7 @@ void loop() {
   MQTT_connect();
   MQTT_ping();
 
-  // this is our 'wait for incoming subscription packets' busy subloop 
-  Adafruit_MQTT_Subscribe *subscription;
+  Adafruit_MQTT_Subscribe *subscription; //MQTT Pull
   while ((subscription = mqtt.readSubscription(100))) {
     if (subscription == &buttonFeed) {
       if (atof((char *)buttonFeed.lastread) == 1){
@@ -173,7 +170,7 @@ void loop() {
       }
     }
   }  
-  if((currentTime-MQTTupdateTimer > 12000)) {
+  if((currentTime-MQTTupdateTimer > 12000)) {  //check timer for MQTT push
     if(mqtt.Update()) {
       AQfeed.publish(airQuality);
       AQvoltageFeed.publish(AQvoltage);
@@ -205,7 +202,20 @@ void loop() {
         display.display();
         delay(2000);
     }
+
+    //dust weirdness
+    duration = pulseIn(dustData, LOW);
+    lowpulseoccupancy = lowpulseoccupancy+duration;
+    if ((millis()-starttime) > sampletime_ms){
+      ratio = lowpulseoccupancy/(sampletime_ms*10.0);  
+      concentration = 1.1*pow(ratio,3)-3.8*pow(ratio,2)+520*ratio+0.62; 
+      Serial.printf("Low Pulse Occ: %i\nRatio: %.02f\nConcentration: %.02f\n\n",lowpulseoccupancy,ratio,concentration);
+      lowpulseoccupancy = 0;
+      starttime = millis();
+    }  
+    dustTimer = millis();
   }
+  
 
 
 //Read Sensors
