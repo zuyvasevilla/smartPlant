@@ -88,7 +88,7 @@ bool MQTT_ping();
 Button waterButton(5);
 const int waterPump = D19;
 int waterCheckTimer;
-int waterCheckInterval = 1800000;
+int waterCheckInterval = 1800000; //how often to check if plant needs water
 void waterPlant();
 
 
@@ -99,14 +99,17 @@ SYSTEM_MODE(AUTOMATIC);
 
 void setup() {
   Serial.begin(9600);
-    WiFi.on();
-    WiFi.connect();
-    while(WiFi.connecting()) {
-        Serial.printf(".");
-      }
-    Serial.printf("\n\n");
-    Time.zone(-7);
-    Particle.syncTime(); 
+  WiFi.on();
+  WiFi.connect();
+  while(WiFi.connecting()) {
+     Serial.printf(".");
+  }
+  Serial.printf("\n\n");
+  Time.zone(-7);
+  Particle.syncTime(); 
+  
+  // Setup MQTT subscription
+  mqtt.subscribe(&buttonFeed);
 
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
  	display.display();
@@ -130,27 +133,43 @@ void setup() {
 
 	strip.begin();  //Init Neopixels
   ring.begin();
-	strip.setBrightness(175);
-  ring.setBrightness(255);
+	strip.setBrightness(255);
+  ring.setBrightness(75);
 	strip.show();
-  ring.show();
+
+  delay(500);
+  ringFill(0,24,red);
+  stripFill(0,12,red);
+  delay(500);
+  ringFill(0,24,green);
+  stripFill(0,12,green);
+  delay(500);
+  ringFill(0,24,blue);
+  stripFill(0,12,purple);
+  //delay(500);
+  //stripFill(0,12,black);
+
     
-  // Setup MQTT subscription
-  mqtt.subscribe(&buttonFeed);
 
 }
 
 void loop() {
+ 
+  //MQTT sub/pub
   MQTT_connect();
   MQTT_ping();
 
-    // this is our 'wait for incoming subscription packets' busy subloop 
+  // this is our 'wait for incoming subscription packets' busy subloop 
   Adafruit_MQTT_Subscribe *subscription;
   while ((subscription = mqtt.readSubscription(100))) {
     if (subscription == &buttonFeed) {
       if (atof((char *)buttonFeed.lastread) == 1){
       waterPlant();
       Serial.printf("Plant Watered through the Net!");
+      setupScreen();
+      display.printf("PLANT\n eSAVED!");
+      display.display();
+      delay(2000);
       }
     }
   }  
@@ -170,10 +189,21 @@ void loop() {
 
   if (waterButton.isClicked()){
     waterPlant();
+    Serial.printf("Plant Saved!");
+    setupScreen();
+    display.printf("PLANT\n SAVED!");
+    display.display();
+    delay(2000);
   }
+
   if ((currentTime - waterCheckTimer) > waterCheckInterval){
     if (moisture>2500){  //change this for dryness trigger
         waterPlant();
+        Serial.printf("Plant Saved!");
+        setupScreen();
+        display.printf("PLANT\n SAVED!");
+        display.display();
+        delay(2000);
     }
   }
 
@@ -195,7 +225,7 @@ void loop() {
   Serial.printf("Current Air Quality: %i\nVoltage Reading:%i\n\n",airQuality,AQvoltage);
 
 //Daylight
-  if (Time.hour()>7 && Time.hour()<16){
+  if (Time.hour()>7 && Time.hour()<18){
     ringFill(0,24, white);
     plantLightState = 1;
   }
@@ -346,7 +376,6 @@ void waterPlant(){
       digitalWrite(waterPump,HIGH);
       delay(500);
       digitalWrite(waterPump,LOW);
-      delay(1000);
 
     for (i=255; i>0; i--){
         r = (i/256.0)*0;
